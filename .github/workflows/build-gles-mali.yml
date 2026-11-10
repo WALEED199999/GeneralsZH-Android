@@ -1,0 +1,132 @@
+
+name: Build Generals Zero Hour GLES for Mali
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Wingear GLES source
+        uses: actions/checkout@v4
+        with:
+          repository: wingear/GeneralsZH-Android-OpenGL-ES
+          ref: gles-backend
+          path: source
+          submodules: false
+
+      - name: Checkout required DXVK headers
+        run: git -C source submodule update --init references/fbraz3-dxvk
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK and build tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "ndk;27.2.12479018" "build-tools;35.0.0" "platforms;android-35"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build zip unzip
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build native GLES libraries
+        run: |
+          export GENERALS_SRC="$GITHUB_WORKSPACE/source"
+          export GENERALS_BUILD="$GITHUB_WORKSPACE/source/build/android-game"
+          export GENERALS_OUT="$GITHUB_WORKSPACE/source/build/android-out"
+          export JOBS=2
+          "$GENERALS_SRC/scripts/build/android/gles/build-engine.sh"
+          mkdir -p "$GENERALS_SRC/android/app/src/main/jniLibs/arm64-v8a"
+          cp "$GENERALS_OUT/libmain.so" "$GENERALS_SRC/android/app/src/main/jniLibs/arm64-v8a/libmain.so"
+          cp "$GENERALS_OUT/libd3d8_gles.so" "$GENERALS_SRC/android/app/src/main/jniLibs/arm64-v8a/libd3d8_gles.so"
+          ls -lh "$GENERALS_SRC/android/app/src/main/jniLibs/arm64-v8a/libmain.so" "$GENERALS_SRC/android/app/src/main/jniLibs/arm64-v8a/libd3d8_gles.so"
+
+      - name: Configure APK for GLES-only Android devices
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path("source")
+
+          activity_path = root / "android/app/src/main/java/me/generalsx/zh/GameActivity.java"
+          activity = activity_path.read_text()
+          start = activity.index("        return new String[]{", activity.index("protected String[] getLibraries"))
+          end = activity.index("        };", start) + len("        };")
+          replacement = '''        // Load the GLES backend before libmain: Android's linker namespace
+                  // must know the library before the engine calls dlopen().
+                  return new String[]{
+                      "SDL3",
+                      "SDL3_image",
+                      "openal",
+                      "d3d8_gles",
+                      "main"
+                  };'''
+          activity_path.write_text(activity[:start] + replacement + activity[end:])
+
+          manifest_path = root / "android/app/src/main/AndroidManifest.xml"
+          manifest = manifest_path.read_text()
+          manifest = re.sub(
+              r'^\s*<uses-feature android:name="android\.hardware\.vulkan\.(?:level|version)"[^>]*/>\s*\n',
+              '',
+              manifest,
+              flags=re.MULTILINE,
+          )
+          touchscreen = '<uses-feature android:name="android.hardware.touchscreen" android:required="true" />'
+          gles_feature = '<uses-feature android:glEsVersion="0x00030000" android:required="true" />'
+          if gles_feature not in manifest:
+              if touchscreen not in manifest:
+                  raise SystemExit("Could not find touchscreen feature in AndroidManifest.xml")
+              manifest = manifest.replace(touchscreen, touchscreen + "\n    " + gles_feature)
+          manifest = manifest.replace('android:label="Generals Zero Hour"', 'android:label="Generals Zero Hour GLES"')
+          manifest_path.write_text(manifest)
+
+          gradle_path = root / "android/app/build.gradle"
+          gradle = gradle_path.read_text()
+          gradle = gradle.replace('applicationId "me.generalsx.zh"', 'applicationId "me.generalsx.zh.gles"')
+          gradle = gradle.replace('ndkVersion "27.1.12297006"', 'ndkVersion "27.2.12479018"')
+          gradle = gradle.replace('versionName "0.1-android"', 'versionName "0.1-gles-mali"')
+          gradle_path.write_text(gradle)
+
+          if '"d3d8_gles"' not in activity_path.read_text():
+              raise SystemExit("GLES library preload patch failed")
+          if 'android.hardware.vulkan.version' in manifest or 'android.hardware.vulkan.level' in manifest:
+              raise SystemExit("Vulkan-required manifest entries remain")
+          if 'android:glEsVersion="0x00030000"' not in manifest:
+              raise SystemExit("OpenGL ES 3.0 manifest feature was not added")
+          print("GLES Android packaging patches applied.")
+          PY
+
+      - name: Build installable APK
+        run: |
+          gradle --no-daemon -p source/android assembleDebug -PSAGE_SKIP_NATIVE_BUILD=true
+          test -f source/android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GeneralsZH-GLES-Mali-APK
+          path: source/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
