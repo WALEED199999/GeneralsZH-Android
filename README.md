@@ -18,11 +18,7 @@ engine with different data.
 
 ## Maintenance status
 
-Active maintenance is ending. A final maintenance candidate is being prepared;
-**v0.12 remains the latest published release until that candidate is validated**.
-No ongoing fixes or support are promised. Forks and continued community work are
-welcome. See the [final handover](docs/WORKDIR/reports/FINAL_MAINTENANCE_HANDOVER.md)
-for the release procedure, preserved context, and remaining validation gates.
+Active maintenance has ended. **v0.12 is the latest published release** and is kept available for community testing and experimentation. Device compatibility and feature support vary; consult the status table below for what has actually been tested. No ongoing fixes or support are promised. Forks and community contributions are welcome. See the [final handover](docs/WORKDIR/reports/FINAL_MAINTENANCE_HANDOVER.md) for preserved technical context and validation notes.
 
 ## Status
 
