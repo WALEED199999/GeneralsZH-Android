@@ -61,6 +61,7 @@ jobs:
           export GENERALS_BUILD="$GITHUB_WORKSPACE/source/build/android-game"
           export GENERALS_OUT="$GITHUB_WORKSPACE/source/build/android-out"
           export JOBS=2
+          chmod +x "$GENERALS_SRC/scripts/build/android/gles/build-engine.sh" "$GENERALS_SRC/scripts/build/android/gles/rebuild.sh"
           "$GENERALS_SRC/scripts/build/android/gles/build-engine.sh"
           mkdir -p "$GENERALS_SRC/android/app/src/main/jniLibs/arm64-v8a"
           cp "$GENERALS_OUT/libmain.so" "$GENERALS_SRC/android/app/src/main/jniLibs/arm64-v8a/libmain.so"
