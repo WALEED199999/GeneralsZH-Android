@@ -20,12 +20,12 @@ jobs:
           ref: gles-backend
           path: source
           submodules: false
-          
-      -name: Fetch required DXVK headers
-  run: |
-    mkdir -p source/references
-    git clone --depth 1 --branch generalsx-macos-v2.6 https://github.com/fbraz3/dxvk.git source/references/fbraz3-dxvk
 
+      - name: Fetch required DXVK headers
+        run: |
+          mkdir -p source/references
+          git clone --depth 1 --branch generalsx-macos-v2.6 https://github.com/fbraz3/dxvk.git source/references/fbraz3-dxvk
+          
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
