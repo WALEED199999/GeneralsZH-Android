@@ -25,7 +25,7 @@ jobs:
         run: |
           mkdir -p source/references
           git clone --depth 1 --branch generalsx-macos-v2.6 https://github.com/fbraz3/dxvk.git source/references/fbraz3-dxvk
-          
+          git -C source/references/fbraz3-dxvk submodule update --init include/native/directx include/vulkan include/spirv
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
